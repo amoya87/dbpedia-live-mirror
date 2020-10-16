@@ -43,18 +43,29 @@ public final class LiveSync {
 
     public static void main(String[] args) {
 
-        if (args != null && args.length > 1) {
-            logger.error("Incorrect arguments in Main. Must be zero or one of {Endless|Onetime}");
+        if (args != null && args.length > 2) {
+            logger.error("Incorrect arguments in Main. Must be zero or one of {Endless|Onetime [2019-06-27-00-000019]}");
             System.exit(1);
         }
         UpdateStrategy strategy = UpdateStrategy.Endless; // default value
-        if (args != null && args.length == 1) {
-            try {
-                strategy = UpdateStrategy.valueOf(args[0]);
-            } catch (Exception e) {
-                logger.error("Incorrect arguments in Main. Must be one of {Endless|Onetime}");
-                System.exit(1);
-            }
+        String until = "9999-00-00-00-000000"; // default value
+        if (args != null) {
+        	if(args.length > 0) {
+	            try {
+	                strategy = UpdateStrategy.valueOf(args[0]);
+	            } catch (Exception e) {
+	                logger.error("Incorrect arguments in Main. Must be one of {Endless|Onetime [2019-06-27-00-000019]}");
+	                System.exit(1);
+	            }
+	        }
+        	if(args.length > 1) {
+	            try {
+	            	until = args[1];
+	            } catch (Exception e) {
+	                logger.error("Incorrect arguments in Main. Must be one of {Endless|Onetime [2019-06-27-00-000019]}");
+	                System.exit(1);
+	            }
+	        }
         }
 
         // setup change executor
@@ -68,6 +79,7 @@ public final class LiveSync {
         // Set latest applied patch
         ChangesetCounter lastDownload = LastDownloadDateManager.getLastDownloadDate(LAST_DOWNLOAD);
         ChangesetCounter currentCounter = new ChangesetCounter(lastDownload);
+        ChangesetCounter untilDownload = new ChangesetCounter(until);
         currentCounter.advancePatch(); // move to next patch (this one is already applied
 
         // Download last published file from server
@@ -76,12 +88,13 @@ public final class LiveSync {
         Utils.downloadFile(lastPublishFileRemote, updatesDownloadFolder);
         String lastPublishFileLocal = updatesDownloadFolder + lastPublishedFilename;
         ChangesetCounter remoteCounter = new ChangesetCounter(Utils.getFileAsString(lastPublishFileLocal));
+        ChangesetCounter untilCounter = (untilDownload.compareTo(remoteCounter) > 0)?remoteCounter:untilDownload;
 
         int missing_urls = 0;
         while (true) {
 
             // when we are about to go beyond the remote published file
-            if (currentCounter.compareTo(remoteCounter) > 0) {
+            if (currentCounter.compareTo(untilCounter) > 0) {
 
                 /**
                  * TODO between the app started (or last fetch of last published file)
@@ -106,6 +119,7 @@ public final class LiveSync {
                 // code duplication
                 Utils.downloadFile(lastPublishFileRemote, updatesDownloadFolder);
                 remoteCounter = new ChangesetCounter(Utils.getFileAsString(lastPublishFileLocal));
+                untilCounter = (untilDownload.compareTo(remoteCounter) > 0)? remoteCounter : untilDownload;
 
                 //now we have an updated remote counter so next time this block will not run (if the updates are running)
                 continue;
